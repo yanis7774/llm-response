@@ -1,6 +1,6 @@
 import {OpenAI} from "@langchain/openai";
-import { anthropicKey, exposeVoiceUrl, generateAndSaveVoiceOver, openaiKey } from "./generations";
-import { debug_logs, modelTypes } from "./globals";
+import { aiConfig, exposeLocalUrl, generateAndSaveVoiceOver } from "./generations";
+import { debugLog, modelTypes } from "./globals";
 import { TextLoader } from "langchain/document_loaders/fs/text";
 import { RetrievalQAChain, loadQAStuffChain } from "langchain/chains";
 import { CheerioWebBaseLoader } from "langchain/dist/document_loaders/web/cheerio";
@@ -15,7 +15,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 export class RagChain {
 
     private chain: any;
-    private loaded: boolean;
+    private loaded: boolean = false;
 
     constructor() {}
 
@@ -24,66 +24,24 @@ export class RagChain {
         modelType: modelTypes,
         file: {src: string, type: string},
         modelName: string = "",
-        temperature: number = 0,
+        temperature: number = 0.2,
         baseUrl: string = "http://localhost:11434"
     ) {
-        if (debug_logs) console.log("Preloading Rag Chain Model...");
+        debugLog("Preloading Rag Chain Model...");
 
         // This section will split context file provided for this Rag Chain Model,
         // create vectorstore and use it as retriever to create RetrievalQAChain
-        let loader: any;
-
-        switch (file.type) {
-            case 'pdf':
-                loader = new PDFLoader(file.src);
-                break;
-            case 'txt':
-                loader = new TextLoader(file.src);
-                break;
-            default:
-                loader = new TextLoader(file.src);
-                break;
-        }
+        let loader = file.type === 'pdf' ? new PDFLoader(file.src) : new TextLoader(file.src);
 
         const docs = await loader.load();
-        const splitter = new RecursiveCharacterTextSplitter({
-            chunkSize: 512,
-            chunkOverlap: 32,
-        });
+        const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 512, chunkOverlap: 32 });
         const splitDocuments = await splitter.splitDocuments(docs);
         const embedings = await this.loadFaceTransformers();
-        const vectorstore = await HNSWLib.fromDocuments(
-            splitDocuments,
-            embedings
-        );
+        const vectorstore = await HNSWLib.fromDocuments(splitDocuments, embedings);
         const retriever = vectorstore.asRetriever();
 
         // This section creates a model depending on specified modelType and parameters
-        let model;
-
-        if (modelType == modelTypes.ollama) {
-            // For local LLMs
-            model = new Ollama({
-                baseUrl: baseUrl,
-                model: modelName == "" ? "mistral" : modelName,
-                temperature: temperature,
-            });
-        } else if (modelType == modelTypes.openAI) {
-            // For OpenAI
-            model = new OpenAI({
-                openAIApiKey: openaiKey,
-                modelName: modelName == "" ? "gpt-3.5-turbo-0613" : modelName,
-                temperature: temperature,
-            });
-        } else {
-            // For Anthropic Claude
-            model = new ChatAnthropic({
-                temperature: temperature,
-                modelName: modelName == "" ? "claude-2.1" : modelName,
-                anthropicApiKey: anthropicKey,
-                maxTokens: 1024,
-            });
-        }
+        const model = this.createModel(modelType, modelName, temperature, baseUrl);
 
         // System prompt
         const template = `Use the following pieces of context to answer the question at the end.
@@ -107,35 +65,48 @@ export class RagChain {
         });
 
         this.loaded = true;
-        if (debug_logs) console.log("Rag Chain Model preloaded successfully!");
+        debugLog("Rag Chain Model preloaded successfully!");
     }
 
-    // Call this function to call prompts. voiceEnabled = true will add voice generation through openAI
-    // Provide app from Express module if you use voice generation
-    // if voice generation is on, you can specify voiceModel
-    async getRagAnswer(question: string, voiceEnabled: boolean = false, app: any = undefined, voiceModel: string = 'alloy') {
-        if (this.loaded) {
-            if (debug_logs) console.log("Getting Rag Chain Model answer...");
-            const response = await this.chain.call({
-                question,
-            });
-            if (debug_logs) console.log("Rag Chain Model answer generated!");
-
-            let exposedUrl = "";
-            if (voiceEnabled) {
-                // Generate and save the voice-over
-                if (debug_logs) console.log("Generating voice for Rag Chain Model answer...");
-                const voiceFilePath = await generateAndSaveVoiceOver(response.text, voiceModel);
-                if (debug_logs) console.log("Voice generated");
-
-                // Expose the URL for the voice file
-                exposedUrl = exposeVoiceUrl(voiceFilePath,app);
-            }
-            return {response,exposedUrl};
-        } else {
-            if (debug_logs) console.log("Rag Chain Model wasn't loaded!");
+    // Call this function to call prompts without voice generation
+    async getRagAnswer(question: string) {
+        if (!this.loaded) {
+            debugLog("Rag Chain Model wasn't loaded!");
             return undefined;
         }
+
+        debugLog("Getting Rag Chain Model answer...");
+        const response = await this.chain.call({
+            question,
+        });
+        debugLog("Rag Chain Model answer generated!");
+
+        return response.text;
+    }
+
+    // Call this function to call prompts. Provide app from Express module if you use voice generation
+    // You can specify voiceModel. If not specified, 'alloy' is chosen by default
+    async getRagAnswerAndVoice(question: string, app: any = undefined, voiceModel: string = 'alloy') {
+        if (!this.loaded) {
+            debugLog("Rag Chain Model wasn't loaded!");
+            return undefined;
+        }
+
+        debugLog("Getting Rag Chain Model answer...");
+        const responseResult = await this.chain.call({
+            question,
+        });
+        const response = responseResult.text;
+        debugLog("Rag Chain Model answer generated!");
+
+        // Generate and save the voice-over
+        debugLog("Generating voice for Rag Chain Model answer...");
+        const voiceFilePath = await generateAndSaveVoiceOver(response.text, voiceModel);
+        debugLog("Voice generated");
+
+        // Expose the URL for the voice file
+        const exposedUrl = exposeLocalUrl('voices',voiceFilePath,app);
+        return {response,exposedUrl};
     }
 
     async loadFaceTransformers() {
@@ -147,6 +118,20 @@ export class RagChain {
     isLoaded() {
         // use to check if preload() has ended
         return this.loaded;
+    }
+
+    private createModel(modelType: modelTypes, modelName: string, temperature: number, baseUrl: string) {
+        const defaultModelName = modelName || (modelType === modelTypes.openAI ? "gpt-3.5-turbo-0613" : (modelType === modelTypes.ollama ? "mistral" : "claude-2.1"));
+        switch (modelType) {
+            case modelTypes.ollama:
+                return new Ollama({ baseUrl: baseUrl, model: defaultModelName, temperature: temperature });
+            case modelTypes.openAI:
+                return new OpenAI({ openAIApiKey: aiConfig.openaiKey, modelName: defaultModelName, temperature: temperature });
+            case modelTypes.anthropic:
+                return new ChatAnthropic({ temperature: temperature, modelName: defaultModelName, anthropicApiKey: aiConfig.anthropicKey, maxTokens: 1024 });
+            default:
+                throw new Error(`Unsupported model type: ${modelType}`);
+        }
     }
 }
 

@@ -10,6 +10,8 @@ Capabilities of the tools in this library:
 
 - Generate voice overs through OpenAI
 
+- Generate images through OpenAI DALLE
+
 When setting up models you can specify their name, temperature and voice model for voice generation. You can also turn off voice generation if not needed.
 
 ## Install the library
@@ -57,38 +59,16 @@ Arguments for tuning rag system in function setMainChain():
 
 ## Getting prompt response without Rag
 
-call getLLMTextAndVoice() function, it has following arguments:
+call await getLLMText() function, it has following arguments:
 
 - systemMessage, system prompt
 - prompt, user prompt
-- voiceEnabled, set it to true to enable voice generation
-- app, you need to add app from Express module here, if you want to use voice generation
-- voiceModel, set to 'alloy' by default
 
-it will return {response, exposedURL}, where response is generated answer and exposedURL is path direction to generated voice (exposedURL will be an empty string if voice generation is off)
+it will return string response
 
 ## Using Rag
 
-use a created before class instance (through createRagChain() function) and call its getRagAnswer()
-
-```ts
-{response, exposedURL} = await mainChain.getRagAnswer(promptText)
-```
-
-Arguments for using this prompt generation:
-
-- question, user prompt
-- voiceEnabled, set it to true to enable voice generation
-- app, you need to add app from Express module here, if you want to use voice generation
-- voiceModel, set to 'alloy' by default
-
-To get response text, use
-
-```ts
-response.text
-```
-
-from function result
+use a created before class instance (through createRagChain() function) and call its getRagAnswer(prompt: string), it will result in answer string
 
 ## Voice generation
 
@@ -108,7 +88,26 @@ config({initializeExpress: (app) => {
     appReadyPromiseResolve(app)}})
 
 // getting the app needed for functions of this module
-await appReadyPromise
+const app = await appReadyPromise;
 ```
 
-Pass the voiceGeneration true argument into any of 2 prompt generation functions, it will generate a voice over and return an exposedUrl variable with full path to voice audio file
+When ready, call async function getLLMTextAndVoice() or getRagAnswerAndVoice() just like their base functions described in previous sections, but add following arguments:
+
+- app, you need to add app from Express module here
+- voiceModel, set to 'alloy' by default
+
+it will return response, where response is generated answer and exposedURL is full path to generated voice. It will look like this:
+
+```ts
+{response, exposedURL} = await mainChain.getRagAnswer(promptText)
+```
+
+## Image generation
+
+To generate image based on prompt, use
+
+```ts
+const imageLocalUrl = await generateAndSaveImage(prompt, app);
+```
+
+Prompt is your string prompt to base generation on. App should be provided from Express module, see Voice generation for app example. Result of this function is full url where image is located.
