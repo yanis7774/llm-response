@@ -3,45 +3,56 @@ import path from "path";
 import OpenAI from "openai";
 import { Audio } from "openai/resources";
 import SpeechCreateParams = Audio.SpeechCreateParams;
-import { debug_logs } from "./globals";
+import { debugLog } from "./globals";
 
-let openai: any;
-export let openaiKey = "";
-export let anthropicKey = "";
+export const aiConfig: any = {openai: undefined, openaiKey: "", anthropicKey: ""}
 
 // setup API keys functions
 // for OpenAI (mandatory if using voice generation, basic prompts with no rag or OpenAI model is used in Rag Chain)
 export async function setupOpenAIKey(key: string) {
-    openaiKey = key;
-    openai = new OpenAI({ apiKey: openaiKey });
-    if (debug_logs) console.log("OpenAI API key is set...");
+    aiConfig.openaiKey = key;
+    aiConfig.openai = new OpenAI({ apiKey: aiConfig.openaiKey });
+    debugLog("OpenAI API key is set...");
 }
 
 // for Anthropic (mandatory if using Anthropic model)
 export async function setupAnthropicKey(key: string) {
-    anthropicKey = key;
-    if (debug_logs) console.log("Anthropic API key is set...");
+    aiConfig.anthropicKey = key;
+    debugLog("Anthropic API key is set...");
 }
 
 // generic prompt generation, no context needed, but OpenAI API key is required
-export async function getLLMTextAndVoice(systemMessage: string, prompt: string, voiceEnabled: boolean = false, app: any = undefined, voiceModel = 'alloy') {
+export async function getLLMText(systemMessage: string, prompt: string) {
     try {
         // Get the response from OpenAI
-        if (debug_logs) console.log("Getting openai answer...");
+        debugLog("Getting openai answer...");
         const response = await getOpenAIAnswer(systemMessage, prompt);
-        if (debug_logs) console.log("Got openai answer!");
+        debugLog("Got openai answer!");
 
-        let exposedUrl = "";
-        if (voiceEnabled) {
-            // Generate and save the voice-over
-            if (debug_logs) console.log("Generating voice...");
-            const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
-            if (debug_logs) console.log("Voice generated successfully!");
+        return response;
+    } catch (error) {
+        console.error(`Error in getText: ${error}`);
+        throw error;
+    }
+}
 
-            // Expose the URL for the voice file
-            exposedUrl = exposeVoiceUrl(voiceFilePath, app);
-            if (debug_logs) console.log("Voice path received!");
-        }
+// generic prompt generation, no context needed, but OpenAI API key is required. Also generates voice
+// app needs to be provided from Express module. voiceModel can be set, default is 'alloy'
+export async function getLLMTextAndVoice(systemMessage: string, prompt: string, app: any = undefined, voiceModel = 'alloy') {
+    try {
+        // Get the response from OpenAI
+        debugLog("Getting openai answer...");
+        const response = await getOpenAIAnswer(systemMessage, prompt);
+        debugLog("Got openai answer!");
+
+        // Generate and save the voice-over
+        debugLog("Generating voice...");
+        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        debugLog("Voice generated successfully!");
+
+        // Expose the URL for the voice file
+        const exposedUrl = exposeLocalUrl('voices', voiceFilePath, app);
+        debugLog("Voice path received!");
 
         return { response, exposedUrl };
     } catch (error) {
@@ -52,16 +63,13 @@ export async function getLLMTextAndVoice(systemMessage: string, prompt: string, 
 
 export async function getOpenAIAnswer(systemMessage: string, prompt: string) {
     try {
-        if (openai != undefined) {
-            const completion = await openai.chat.completions.create({
+        if (aiConfig.openai != undefined) {
+            const completion = await aiConfig.openai.chat.completions.create({
                 messages: [{ "role": "system", "content": systemMessage }, { "role": "user", "content": prompt }],
                 model: "gpt-3.5-turbo",
             });
 
-            const answer = completion.choices[0].message.content
-            //console.log(`OpenAI response: ${answer}`)
-
-            return answer
+            return completion.choices[0].message.content
         } else {
             return "OPEN AI API KEY WAS NOT SET OR IS SET WRONG";
         }
@@ -74,25 +82,23 @@ export async function getOpenAIAnswer(systemMessage: string, prompt: string) {
 export async function generateAndSaveVoiceOver(text: string, voiceModel = 'alloy') {
     try {
         // Creating the voiceover
-        const mp3 = await openai.audio.speech.create(<SpeechCreateParams>{
+        const mp3 = await aiConfig.openai.audio.speech.create(<SpeechCreateParams>{
             model: "tts-1",
             voice: voiceModel,
             input: text,
             speed: 1.2
         });
 
-        // Getting path and saving voice
+        // Getting path
         const folderPath = './voices';
         const timestamp = new Date().getTime();
         const filename = `voice_${timestamp}.mp3`;
-
-        if (!fs.existsSync(folderPath)) {
-            fs.mkdirSync(folderPath);
-        }
-
         const fullPath = path.join(folderPath, filename);
-        const buffer = Buffer.from(await mp3.arrayBuffer());
-        await fs.promises.writeFile(fullPath, buffer);
+
+        // Saving voice
+        fs.promises.mkdir(folderPath, { recursive: true })
+        .then(async () => fs.promises.writeFile(fullPath, Buffer.from(await mp3.arrayBuffer())))
+        .catch(console.error);
 
         return fullPath;
     } catch (error) {
@@ -101,23 +107,67 @@ export async function generateAndSaveVoiceOver(text: string, voiceModel = 'alloy
     }
 }
 
-export function exposeVoiceUrl(voicePath: string, app: any) {
+export function exposeLocalUrl(baseFolder: string, voicePath: string, app: any) {
     // Getting voice source
-    if (app == undefined)
-        return ``;
+    if (!app) return ``;
 
-    const urlPath = `/voices/${path.basename(voicePath)}`;
-
-    // @ts-ignore
-    app.get(urlPath, (req: any, res: { sendFile: (arg0: string, arg1: (err: any) => void) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: string): void; new(): any; }; }; }) => {
+    const urlPath = `/${baseFolder}/${path.basename(voicePath)}`;
+    app.get(urlPath, (req: any, res: any) => {
         const absolutePath = path.resolve(voicePath);
-        res.sendFile(absolutePath, (err) => {
+        res.sendFile(absolutePath, (err: any) => {
             if (err) {
                 console.error(`Error serving ${absolutePath}:`, err);
-                res.status(500).send("Error serving voice file");
+                res.status(500).send("Error serving file");
             }
         });
     });
 
-    return `${urlPath}`;
+    return urlPath;
+}
+
+export async function generateAndSaveImage(prompt: string, app: any) {
+    debugLog("Generating image...");
+    const response = await generateImageWithDALLE(prompt);
+    debugLog("Image generated successfully!");
+    debugLog("Saving image...")
+    const file = await saveImageToFile(response);
+    debugLog("Image saved successfully!")
+    return exposeLocalUrl('images', file, app);
+}
+
+async function generateImageWithDALLE(prompt: string) {
+    try {
+        const response = await aiConfig.openai.images.generate({
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+        });
+        return response.data[0].url;
+    } catch (error) {
+        console.error(`Error in generateImageWithDALLE: ${error}`);
+        throw new Error(`Error generating image: ${error}`);
+    }
+}
+
+async function saveImageToFile(base64Data: WithImplicitCoercion<string> | {
+    [Symbol.toPrimitive](hint: "string"): string;
+}) {
+    try {
+        // Getting path
+        const folderPath = './images';
+        const timestamp = new Date().getTime();
+        const filename = `image_${timestamp}.png`;
+        const fullPath = path.join(folderPath, filename);
+
+        // Saving image
+        fs.promises.mkdir(folderPath, { recursive: true })
+        .then(async () => fs.promises.writeFile(fullPath, Buffer.from(base64Data, 'base64'), 'binary'))
+        .catch(console.error);
+
+        return fullPath;
+
+    } catch (error) {
+        console.error('Error saving the image:', error);
+        return '';
+    }
 }
