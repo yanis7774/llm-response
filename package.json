@@ -1,6 +1,6 @@
 {
   "name": "llm_response",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Simple library to get response from OpenAI, Claude, Ollama. With optional RAG feature.\n\n",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",

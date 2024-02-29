@@ -141,8 +141,9 @@ async function generateImageWithDALLE(prompt: string) {
             prompt: prompt,
             n: 1,
             size: "1024x1024",
+            response_format: "b64_json"
         });
-        return response.data[0].url;
+        return response.data[0].b64_json;
     } catch (error) {
         console.error(`Error in generateImageWithDALLE: ${error}`);
         throw new Error(`Error generating image: ${error}`);
@@ -161,7 +162,7 @@ async function saveImageToFile(base64Data: WithImplicitCoercion<string> | {
 
         // Saving image
         fs.promises.mkdir(folderPath, { recursive: true })
-        .then(async () => fs.promises.writeFile(fullPath, Buffer.from(base64Data, 'base64'), 'binary'))
+        .then(async () => fs.promises.writeFile(fullPath, Buffer.from(base64Data, 'base64')))
         .catch(console.error);
 
         return fullPath;
