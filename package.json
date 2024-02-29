@@ -1,0 +1,41 @@
+{
+  "name": "llm_response",
+  "version": "0.0.1",
+  "description": "Simple library to get response from OpenAI, Claude, Ollama. With optional RAG feature.\n\n",
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yanis7774/llm-response"
+  },
+  "author": "yanis7774",
+  "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "^4.17.21",
+    "ts-node": "^8.10.2",
+    "ts-node-dev": "^1.1.8",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.1.0",
+    "@langchain/community": "^0.0.16",
+    "@langchain/openai": "^0.0.11",
+    "@xenova/transformers": "^2.14.0",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.18.2",
+    "fs": "^0.0.1-security",
+    "hnswlib-node": "^1.4.2",
+    "langchain": "^0.1.2",
+    "openai": "^4.26.0",
+    "path": "^0.12.7",
+    "pdf-parse": "^1.1.1"
+  }
+}
