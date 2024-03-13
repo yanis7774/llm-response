@@ -4,8 +4,9 @@ import OpenAI from "openai";
 import { Audio } from "openai/resources";
 import SpeechCreateParams = Audio.SpeechCreateParams;
 import { debugLog } from "./globals";
+import { Ollama } from "@langchain/community/llms/ollama";
 
-export const aiConfig: any = {openai: undefined, openaiKey: "", anthropicKey: ""}
+export const aiConfig: any = {ollama: undefined, openai: undefined, openaiKey: "", anthropicKey: ""}
 
 // setup API keys functions
 // for OpenAI (mandatory if using voice generation, basic prompts with no rag or OpenAI model is used in Rag Chain)
@@ -21,6 +22,11 @@ export async function setupAnthropicKey(key: string) {
     debugLog("Anthropic API key is set...");
 }
 
+// To setup Ollama, all arguments have defaults
+export async function setupOllama(modelName: string = "mistral", temperature: number = 0.2, baseUrl: string = "http://localhost:11434") {
+    aiConfig.ollama = new Ollama({ baseUrl: baseUrl, model: modelName, temperature: temperature });
+}
+
 // generic prompt generation, no context needed, but OpenAI API key is required
 export async function getLLMText(systemMessage: string, prompt: string) {
     try {
@@ -30,6 +36,46 @@ export async function getLLMText(systemMessage: string, prompt: string) {
         debugLog("Got openai answer!");
 
         return response;
+    } catch (error) {
+        console.error(`Error in getText: ${error}`);
+        throw error;
+    }
+}
+
+// generic prompt generation through Ollama
+export async function getOllamaText(prompt: string) {
+    try {
+        // Get the response from OpenAI
+        debugLog("Getting ollama answer...");
+        const response = await aiConfig.ollama.invoke(prompt);
+        debugLog("Got ollama answer!");
+
+        return response;
+    } catch (error) {
+        console.error(`Error in getText: ${error}`);
+        throw error;
+    }
+}
+
+// generic prompt generation through, no context needed, but OpenAI API key is required. Also generates voice
+// app needs to be provided from Express module. voiceModel can be set, default is 'alloy'
+export async function getOllamaTextAndVoice(prompt: string, app: any = undefined, voiceModel = 'alloy') {
+    try {
+        // Get the response from OpenAI
+        debugLog("Getting ollama answer...");
+        const response = await aiConfig.ollama.invoke(prompt);
+        debugLog("Got ollama answer!");
+
+        // Generate and save the voice-over
+        debugLog("Generating voice...");
+        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        debugLog("Voice generated successfully!");
+
+        // Expose the URL for the voice file
+        const exposedUrl = exposeLocalUrl('voices', voiceFilePath, app);
+        debugLog("Voice path received!");
+
+        return { response, exposedUrl };
     } catch (error) {
         console.error(`Error in getText: ${error}`);
         throw error;
