@@ -11,5 +11,6 @@ export function debugLog(message: any) {
 export enum modelTypes {
     ollama,
     openAI,
-    anthropic
+    anthropic,
+    HFE
 }

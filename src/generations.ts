@@ -6,7 +6,7 @@ import SpeechCreateParams = Audio.SpeechCreateParams;
 import { debugLog } from "./globals";
 import { Ollama } from "@langchain/community/llms/ollama";
 
-export const aiConfig: any = {ollama: undefined, openai: undefined, openaiKey: "", anthropicKey: ""}
+export const aiConfig: any = {ollama: undefined, openai: undefined, openaiKey: "", anthropicKey: "", hfKey: ""}
 
 // setup API keys functions
 // for OpenAI (mandatory if using voice generation, basic prompts with no rag or OpenAI model is used in Rag Chain)
