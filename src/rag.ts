@@ -10,6 +10,7 @@ import { HNSWLib}  from "@langchain/community/vectorstores/hnswlib";
 import { Ollama } from "@langchain/community/llms/ollama";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { ChatAnthropic } from "@langchain/anthropic";
+import {HuggingFaceInference} from "@langchain/community/llms/hf";
 
 // Main class for using Rag, should not be inited directly, use createRagChain() function
 export class RagChain {
@@ -129,6 +130,15 @@ export class RagChain {
                 return new OpenAI({ openAIApiKey: aiConfig.openaiKey, modelName: defaultModelName, temperature: temperature });
             case modelTypes.anthropic:
                 return new ChatAnthropic({ temperature: temperature, modelName: defaultModelName, anthropicApiKey: aiConfig.anthropicKey, maxTokens: 1024 });
+            case modelTypes.HFE:
+                return new HuggingFaceInference({
+                    model: modelName,
+                    apiKey:  aiConfig.hfKey, // In Node.js defaults to process.env.HUGGINGFACEHUB_API_KEY
+                    endpointUrl: baseUrl,
+                    temperature: 0.7,
+                    //     verbose: true,
+                    //     numCtx: 8192,
+                });
             default:
                 throw new Error(`Unsupported model type: ${modelType}`);
         }
