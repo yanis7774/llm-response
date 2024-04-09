@@ -3,10 +3,11 @@ import path from "path";
 import OpenAI from "openai";
 import { Audio } from "openai/resources";
 import SpeechCreateParams = Audio.SpeechCreateParams;
+import Replicate from 'replicate';
 import { debugLog } from "./globals";
 import { Ollama } from "@langchain/community/llms/ollama";
 
-export const aiConfig: any = {ollama: undefined, openai: undefined, openaiKey: "", anthropicKey: "", hfKey: ""}
+export const aiConfig: any = {ollama: undefined, openai: undefined, replicate: undefined, openaiKey: "", anthropicKey: "", hfKey: "", replicateKey: ""}
 
 // setup API keys functions
 // for OpenAI (mandatory if using voice generation, basic prompts with no rag or OpenAI model is used in Rag Chain)
@@ -25,6 +26,13 @@ export async function setupAnthropicKey(key: string) {
 // To setup Ollama, all arguments have defaults
 export async function setupOllama(modelName: string = "mistral", temperature: number = 0.2, baseUrl: string = "http://localhost:11434") {
     aiConfig.ollama = new Ollama({ baseUrl: baseUrl, model: modelName, temperature: temperature });
+}
+
+// To setup Replicate, only API key is needed
+export async function setupReplicateKey(key: string) {
+    aiConfig.replicateKey = key
+    aiConfig.replicate = new Replicate({ auth: key });
+    debugLog("Replicate API key is set...");
 }
 
 // generic prompt generation, no context needed, but OpenAI API key is required
@@ -217,4 +225,24 @@ async function saveImageToFile(base64Data: WithImplicitCoercion<string> | {
         console.error('Error saving the image:', error);
         return '';
     }
+}
+
+export async function generateMusic(prompt: string) {
+
+    if (aiConfig.replicate != undefined) {
+        debugLog("Generating music...");
+        const input = {
+            prompt: prompt,
+            model_version: "large",
+            output_format: "mp3",
+            normalization_strategy: "peak"
+        };
+        const output = await aiConfig.replicate.run("meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb", {input});
+        debugLog("Music generated!");
+        return output;
+    } else {
+        debugLog("Replicate API key is not set");
+        return "";
+    }
+
 }
