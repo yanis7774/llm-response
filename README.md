@@ -12,6 +12,8 @@ Capabilities of the tools in this library:
 
 - Generate images through OpenAI DALLE
 
+- Generate music through Replicate
+
 When setting up models you can specify their name, temperature and voice model for voice generation. You can also turn off voice generation if not needed.
 
 ## Install the library
@@ -70,6 +72,12 @@ it will return string response
 
 use a created before class instance (through createRagChain() function) and call its getRagAnswer(prompt: string), it will result in answer string
 
+## Rag and using files
+
+When using Rag, you provide a TXT or PDF file as a context. Place desired files locally
+and when using createRagChain, put local path to file in src field (check Via npm to
+see function format)
+
 ## Voice generation
 
 If you want to use voice generation, you need to:
@@ -111,3 +119,19 @@ const imageLocalUrl = await generateAndSaveImage(prompt, app);
 ```
 
 Prompt is your string prompt to base generation on. App should be provided from Express module, see Voice generation for app example. Result of this function is full url where image is located.
+
+## Music generation
+
+Music generation is not tied to openAi or other llm. Instead setup Replicate API key:
+
+```ts
+setupReplicateKey(process.env.REPLICATE_API_TOKEN);
+```
+
+And then call
+
+```ts
+await generateMusic("your prompt");
+```
+
+It will return url to music file online
