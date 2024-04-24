@@ -135,3 +135,12 @@ await generateMusic("your prompt");
 ```
 
 It will return url to music file online
+
+## Configured AI responses
+
+You can use following openAI methods to use a config object as system message. They work identically to original methods, but use config object instead of systemMessage parameter.
+
+```ts
+await getLLmTextConfigured();
+await getLLmTextAndVoiceConfigured();
+```

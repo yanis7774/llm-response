@@ -50,6 +50,22 @@ export async function getLLMText(systemMessage: string, prompt: string) {
     }
 }
 
+// generic prompt generation, no context needed, but OpenAI API key is required
+// use config to auto build a system message
+export async function getLLMTextConfigured(config: {name: string, description: string, task: string}, prompt: string) {
+    try {
+        // Get the response from OpenAI
+        debugLog("Getting openai answer...");
+        const response = await getOpenAIAnswer(`You are ${config.name}. You are ${config.description}. Your goal is ${config.task}`, prompt);
+        debugLog("Got openai answer!");
+
+        return response;
+    } catch (error) {
+        console.error(`Error in getText: ${error}`);
+        throw error;
+    }
+}
+
 // generic prompt generation through Ollama
 export async function getOllamaText(prompt: string) {
     try {
@@ -97,6 +113,32 @@ export async function getLLMTextAndVoice(systemMessage: string, prompt: string, 
         // Get the response from OpenAI
         debugLog("Getting openai answer...");
         const response = await getOpenAIAnswer(systemMessage, prompt);
+        debugLog("Got openai answer!");
+
+        // Generate and save the voice-over
+        debugLog("Generating voice...");
+        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        debugLog("Voice generated successfully!");
+
+        // Expose the URL for the voice file
+        const exposedUrl = exposeLocalUrl('voices', voiceFilePath, app);
+        debugLog("Voice path received!");
+
+        return { response, exposedUrl };
+    } catch (error) {
+        console.error(`Error in getTextAndVoice: ${error}`);
+        throw error;
+    }
+}
+
+// generic prompt generation, no context needed, but OpenAI API key is required. Also generates voice
+// app needs to be provided from Express module. voiceModel can be set, default is 'alloy'
+// use config to auto build a system message
+export async function getLLMTextAndVoiceConfigured(config: {name: string, description: string, task: string}, prompt: string, app: any = undefined, voiceModel = 'alloy') {
+    try {
+        // Get the response from OpenAI
+        debugLog("Getting openai answer...");
+        const response = await getOpenAIAnswer(`You are ${config.name}. You are ${config.description}. Your goal is ${config.task}`, prompt);
         debugLog("Got openai answer!");
 
         // Generate and save the voice-over
