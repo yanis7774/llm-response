@@ -1,6 +1,6 @@
 {
   "name": "llm_response",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Simple library to get response from OpenAI, Claude, Ollama. With optional RAG feature.\n\n",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",
@@ -28,7 +28,9 @@
     "@langchain/anthropic": "^0.1.0",
     "@langchain/community": "^0.0.16",
     "@langchain/openai": "^0.0.11",
-    "@xenova/transformers": "^2.14.0",
+    "@xenova/transformers": "^2.17.1",
+    "@xenova/transformers-v3": "github:xenova/transformers.js#v3",
+    "axios": "1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
     "fs": "^0.0.1-security",
@@ -37,6 +39,7 @@
     "openai": "^4.26.0",
     "path": "^0.12.7",
     "pdf-parse": "^1.1.1",
-    "replicate": "^0.18.1"
+    "replicate": "^0.18.1",
+    "wavefile": "^11.0.0"
   }
 }
