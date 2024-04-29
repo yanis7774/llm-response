@@ -110,6 +110,15 @@ it will return response, where response is generated answer and exposedURL is fu
 {response, exposedURL} = await mainChain.getRagAnswer(promptText)
 ```
 
+You can change openAI voice generation to Xenova by turning it on with
+
+```ts
+setOSVoiceGeneration(true);
+```
+
+Which will make all voice generation in the app with Xenova transformers.
+In this case you may skip openAI key setup (for voice generation purposes)
+
 ## Image generation
 
 To generate image based on prompt, use
@@ -120,9 +129,20 @@ const imageLocalUrl = await generateAndSaveImage(prompt, app);
 
 Prompt is your string prompt to base generation on. App should be provided from Express module, see Voice generation for app example. Result of this function is full url where image is located.
 
+You can also use Inpaint by setting up inpaint URL and calling image generation:
+
+```ts
+setupInpaintUrl("url");
+const inpaintImageUrl = await inpaintImage("prompt");
+```
+
+Will return generated image local url
+
 ## Music generation
 
-Music generation is not tied to openAi or other llm. Instead setup Replicate API key:
+Music generation is not tied to openAi or other llm. There are 2 ways of genrating music: Replicate and Xenova transformers.
+
+For Replicate setup Replicate API key:
 
 ```ts
 setupReplicateKey(process.env.REPLICATE_API_TOKEN);
@@ -135,6 +155,14 @@ await generateMusic("your prompt");
 ```
 
 It will return url to music file online
+
+For Xenova transformers use
+
+```ts
+await generateMusicOS("your prompt", app);
+```
+
+It will return local url to generated music. App is transferred inside this function just like in voice generation chapter
 
 ## Configured AI responses
 
