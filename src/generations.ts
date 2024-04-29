@@ -6,6 +6,10 @@ import SpeechCreateParams = Audio.SpeechCreateParams;
 import Replicate from 'replicate';
 import { debugLog } from "./globals";
 import { Ollama } from "@langchain/community/llms/ollama";
+import {pipeline} from "@xenova/transformers";
+import { AutoTokenizer, MusicgenForConditionalGeneration } from "@xenova/transformers-v3";
+import axios from "axios";
+import wavefile from 'wavefile';
 
 export const aiConfig: any = {ollama: undefined, openai: undefined, replicate: undefined, openaiKey: "", anthropicKey: "", hfKey: "", replicateKey: ""}
 
@@ -286,5 +290,62 @@ export async function generateMusic(prompt: string) {
         debugLog("Replicate API key is not set");
         return "";
     }
+}
+
+export async function generateMusicOS(prompt: string, app: any) {
+
+    // Load tokenizer and model
+    const tokenizer = await AutoTokenizer.from_pretrained('Xenova/musicgen-small');
+    const model = await MusicgenForConditionalGeneration.from_pretrained('Xenova/musicgen-small', {
+        dtype: {
+            text_encoder: 'q8',
+            decoder_model_merged: 'q8',
+            encodec_decode: 'fp32',
+        },
+    });
+
+    // Prepare text input
+    const inputs = tokenizer(prompt);
+
+    // Generate audio
+    const audio_values = await model.generate({
+        ...inputs,
+        max_new_tokens: 500,
+        do_sample: true,
+        guidance_scale: 3,
+    });
+
+
+    const wav = new wavefile.WaveFile();
+    wav.fromScratch(1, model.config.audio_encoder.sampling_rate, '32f', audio_values.data);
+
+    const folderPath = './music';
+    const timestamp = new Date().getTime();
+    const filename = `musicOS_${timestamp}.wav`;
+    const fullPath = path.join(folderPath, filename);
+
+    fs.writeFileSync(fullPath, wav.toBuffer());
+
+    return exposeLocalUrl('voices', fullPath, app);
+
+}
+
+export async function generateVoiceOS(prompt: string, app: any) {
+
+    const synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: false });
+    const speaker_embeddings = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin';
+    const out = await synthesizer(prompt, { speaker_embeddings });
+
+    const wav = new wavefile.WaveFile();
+    wav.fromScratch(1, out.sampling_rate, '32f', out.audio);
+
+    const folderPath = './voices';
+    const timestamp = new Date().getTime();
+    const filename = `voiceOS_${timestamp}.wav`;
+    const fullPath = path.join(folderPath, filename);
+
+    fs.writeFileSync(fullPath, wav.toBuffer());
+
+    return exposeLocalUrl('voices', fullPath, app);
 
 }
