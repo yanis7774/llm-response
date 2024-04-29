@@ -14,3 +14,7 @@ export enum modelTypes {
     anthropic,
     HFE
 }
+
+export const inpaintingPayload = {
+    "prompt": "red jacket",
+}

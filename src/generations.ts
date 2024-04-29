@@ -4,14 +4,14 @@ import OpenAI from "openai";
 import { Audio } from "openai/resources";
 import SpeechCreateParams = Audio.SpeechCreateParams;
 import Replicate from 'replicate';
-import { debugLog } from "./globals";
+import { debugLog, inpaintingPayload } from "./globals";
 import { Ollama } from "@langchain/community/llms/ollama";
 import {pipeline} from "@xenova/transformers";
 import { AutoTokenizer, MusicgenForConditionalGeneration } from "@xenova/transformers-v3";
 import axios from "axios";
 import wavefile from 'wavefile';
 
-export const aiConfig: any = {ollama: undefined, openai: undefined, replicate: undefined, openaiKey: "", anthropicKey: "", hfKey: "", replicateKey: ""}
+export const aiConfig: any = {ollama: undefined, openai: undefined, replicate: undefined, openaiKey: "", anthropicKey: "", hfKey: "", replicateKey: "", inpaintUrl: "", voiceOSGeneration: false}
 
 // setup API keys functions
 // for OpenAI (mandatory if using voice generation, basic prompts with no rag or OpenAI model is used in Rag Chain)
@@ -19,6 +19,13 @@ export async function setupOpenAIKey(key: string) {
     aiConfig.openaiKey = key;
     aiConfig.openai = new OpenAI({ apiKey: aiConfig.openaiKey });
     debugLog("OpenAI API key is set...");
+}
+
+export function setOSVoiceGeneration(mode: boolean) {
+    aiConfig.voiceOSGeneration = mode;
+}
+export function setupInpaintUrl(url: string) {
+    aiConfig.inpaintUrl = url;
 }
 
 // for Anthropic (mandatory if using Anthropic model)
@@ -96,7 +103,7 @@ export async function getOllamaTextAndVoice(prompt: string, app: any = undefined
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -121,7 +128,7 @@ export async function getLLMTextAndVoice(systemMessage: string, prompt: string, 
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -147,7 +154,7 @@ export async function getLLMTextAndVoiceConfigured(config: {name: string, descri
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -273,6 +280,27 @@ async function saveImageToFile(base64Data: WithImplicitCoercion<string> | {
     }
 }
 
+async function sendPostRequest(url: string, headers: any, payload: any): Promise<any> {
+    try {
+        const response = await axios.post(url, payload, { headers });
+        if (response.status === 200) {
+            return response;
+        } else {
+            throw new Error(`Failed to get a successful response! Status code: ${response.status}, Response: ${response.statusText}`);
+        }
+    } catch (error) {
+        throw new Error(`HTTP Request Failed: ${error}`);
+    }
+}
+
+export async function inpaintImage(prompt: string): Promise<void> {
+    const payload = inpaintingPayload;
+    // @ts-ignore
+    payload["prompt"] = [prompt];
+    const response = await sendPostRequest(aiConfig.inpaintUrl, {}, payload);
+    return response.data.images[0];
+}
+
 export async function generateMusic(prompt: string) {
 
     if (aiConfig.replicate != undefined) {
@@ -297,6 +325,64 @@ export async function generateMusicOS(prompt: string, app: any) {
     // Load tokenizer and model
     const tokenizer = await AutoTokenizer.from_pretrained('Xenova/musicgen-small');
     const model = await MusicgenForConditionalGeneration.from_pretrained('Xenova/musicgen-small', {
+        dtype: {
+            text_encoder: 'q8',
+            decoder_model_merged: 'q8',
+            encodec_decode: 'fp32',
+        },
+    });
+
+    // Prepare text input
+    const inputs = tokenizer(prompt);
+
+    // Generate audio
+    const audio_values = await model.generate({
+        ...inputs,
+        max_new_tokens: 500,
+        do_sample: true,
+        guidance_scale: 3,
+    });
+
+
+    const wav = new wavefile.WaveFile();
+    wav.fromScratch(1, model.config.audio_encoder.sampling_rate, '32f', audio_values.data);
+
+    const folderPath = './music';
+    const timestamp = new Date().getTime();
+    const filename = `musicOS_${timestamp}.wav`;
+    const fullPath = path.join(folderPath, filename);
+
+    fs.writeFileSync(fullPath, wav.toBuffer());
+
+    return exposeLocalUrl('voices', fullPath, app);
+
+}
+
+export async function generateVoiceOS(prompt: string, app: any) {
+
+    const synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: false });
+    const speaker_embeddings = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin';
+    const out = await synthesizer(prompt, { speaker_embeddings });
+
+    const wav = new wavefile.WaveFile();
+    wav.fromScratch(1, out.sampling_rate, '32f', out.audio);
+
+    const folderPath = './voices';
+    const timestamp = new Date().getTime();
+    const filename = `voiceOS_${timestamp}.wav`;
+    const fullPath = path.join(folderPath, filename);
+
+    fs.writeFileSync(fullPath, wav.toBuffer());
+
+    return exposeLocalUrl('voices', fullPath, app);
+
+}
+
+export async function generateMusicOS(prompt: string, app: any) {
+
+    // Load tokenizer and model
+    const tokenizer = await transformersV3.AutoTokenizer.from_pretrained('Xenova/musicgen-small');
+    const model = await transformersV3.MusicgenForConditionalGeneration.from_pretrained('Xenova/musicgen-small', {
         dtype: {
             text_encoder: 'q8',
             decoder_model_merged: 'q8',
