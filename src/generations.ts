@@ -6,10 +6,10 @@ import SpeechCreateParams = Audio.SpeechCreateParams;
 import Replicate from 'replicate';
 import { debugLog, inpaintingPayload } from "./globals";
 import { Ollama } from "@langchain/community/llms/ollama";
-import {pipeline} from "@xenova/transformers";
-import { AutoTokenizer, MusicgenForConditionalGeneration } from "@xenova/transformers-v3";
 import axios from "axios";
-import wavefile from 'wavefile';
+import {WaveFile} from 'wavefile';
+
+//import { generateMusicOSFirstStep } from "./musicGeneration";
 
 export const aiConfig: any = {ollama: undefined, openai: undefined, replicate: undefined, openaiKey: "", anthropicKey: "", hfKey: "", replicateKey: "", inpaintUrl: "", voiceOSGeneration: false}
 
@@ -103,7 +103,7 @@ export async function getOllamaTextAndVoice(prompt: string, app: any = undefined
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -128,7 +128,7 @@ export async function getLLMTextAndVoice(systemMessage: string, prompt: string, 
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -154,7 +154,7 @@ export async function getLLMTextAndVoiceConfigured(config: {name: string, descri
 
         // Generate and save the voice-over
         debugLog("Generating voice...");
-        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response, app) : await generateAndSaveVoiceOver(response, voiceModel);
+        const voiceFilePath = aiConfig.voiceOSGeneration ? await generateVoiceOS(response) : await generateAndSaveVoiceOver(response, voiceModel);
         debugLog("Voice generated successfully!");
 
         // Expose the URL for the voice file
@@ -320,51 +320,14 @@ export async function generateMusic(prompt: string) {
     }
 }
 
-export async function generateMusicOS(prompt: string, app: any) {
+export async function generateVoiceOS(prompt: string) {
 
-    // Load tokenizer and model
-    const tokenizer = await AutoTokenizer.from_pretrained('Xenova/musicgen-small');
-    const model = await MusicgenForConditionalGeneration.from_pretrained('Xenova/musicgen-small', {
-        dtype: {
-            text_encoder: 'q8',
-            decoder_model_merged: 'q8',
-            encodec_decode: 'fp32',
-        },
-    });
-
-    // Prepare text input
-    const inputs = tokenizer(prompt);
-
-    // Generate audio
-    const audio_values = await model.generate({
-        ...inputs,
-        max_new_tokens: 500,
-        do_sample: true,
-        guidance_scale: 3,
-    });
-
-
-    const wav = new wavefile.WaveFile();
-    wav.fromScratch(1, model.config.audio_encoder.sampling_rate, '32f', audio_values.data);
-
-    const folderPath = './music';
-    const timestamp = new Date().getTime();
-    const filename = `musicOS_${timestamp}.wav`;
-    const fullPath = path.join(folderPath, filename);
-
-    fs.writeFileSync(fullPath, wav.toBuffer());
-
-    return exposeLocalUrl('voices', fullPath, app);
-
-}
-
-export async function generateVoiceOS(prompt: string, app: any) {
-
+    const {pipeline} = await Function('return import("@xenova/transformers/src/pipelines.js")')();
     const synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: false });
     const speaker_embeddings = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin';
     const out = await synthesizer(prompt, { speaker_embeddings });
 
-    const wav = new wavefile.WaveFile();
+    const wav = new WaveFile();
     wav.fromScratch(1, out.sampling_rate, '32f', out.audio);
 
     const folderPath = './voices';
@@ -372,8 +335,15 @@ export async function generateVoiceOS(prompt: string, app: any) {
     const filename = `voiceOS_${timestamp}.wav`;
     const fullPath = path.join(folderPath, filename);
 
-    fs.writeFileSync(fullPath, wav.toBuffer());
+    fs.promises.mkdir(folderPath, { recursive: true })
+    .then(async () => fs.promises.writeFile(fullPath, wav.toBuffer()))
+    .catch(console.error);
 
-    return exposeLocalUrl('voices', fullPath, app);
+    return fullPath;
+}
 
+export async function generateMusicOS(prompt: string, app: any) {
+    // const fullPath = await generateMusicOSFirstStep(prompt);
+    // return exposeLocalUrl('voices', fullPath, app);
+    return "";
 }
