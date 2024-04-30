@@ -354,7 +354,47 @@ export async function generateVoiceOS(prompt: string) {
 }
 
 export async function generateMusicOS(prompt: string, app: any) {
-    // const fullPath = await generateMusicOSFirstStep(prompt);
-    // return exposeLocalUrl('voices', fullPath, app);
-    return "";
+
+    const {AutoTokenizer} = await Function('return import("@xenova/transformers-v3/src/tokenizers.js")')();
+    const {MusicgenForConditionalGeneration} = await Function('return import("@xenova/transformers-v3/src/models.js")')();
+    // Load tokenizer and model
+    debugLog("Generating music...");
+    const tokenizer = await AutoTokenizer.from_pretrained('Xenova/musicgen-small');
+    const model = await MusicgenForConditionalGeneration.from_pretrained('Xenova/musicgen-small', {
+        dtype: {
+            text_encoder: 'q8',
+            decoder_model_merged: 'q8',
+            encodec_decode: 'fp32',
+        },
+    });
+
+    // Prepare text input
+    const inputs = tokenizer(prompt);
+
+    // Generate audio
+    const audio_values = await model.generate({
+        ...inputs,
+        max_new_tokens: 500,
+        do_sample: true,
+        guidance_scale: 3,
+    });
+
+
+    debugLog("Music generated!");
+    debugLog("Saving music...");
+
+    const wav = new WaveFile();
+    wav.fromScratch(1, model.config.audio_encoder.sampling_rate, '32f', audio_values.data);
+
+    const folderPath = './music';
+    const timestamp = new Date().getTime();
+    const filename = `musicOS_${timestamp}.wav`;
+    const fullPath = path.join(folderPath, filename);
+
+    fs.promises.mkdir(folderPath, { recursive: true })
+    .then(async () => fs.promises.writeFile(fullPath, wav.toBuffer()))
+    .catch(console.error);
+
+    debugLog("Music saved!");
+    return exposeLocalUrl('music', fullPath, app);
 }
