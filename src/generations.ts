@@ -242,6 +242,23 @@ export async function generateAndSaveImage(prompt: string, app: any) {
     return exposeLocalUrl('images', file, app);
 }
 
+export async function inpaintImage(prompt: string, app: any): Promise<string> {
+    debugLog("Generating image...");
+    const payload = inpaintingPayload;
+    // @ts-ignore
+    payload["prompt"] = prompt;
+    const response = await sendPostRequest(aiConfig.inpaintUrl, {}, payload);
+    if (response) {
+        debugLog("Image generated successfully!");
+        debugLog("Saving image...")
+        const file = await saveImageToFile(response.data.images[0]);
+        debugLog("Image saved successfully!")
+        return exposeLocalUrl('images', file, app);
+    }
+    debugLog("Image generation failed!");
+    return "";
+}
+
 async function generateImageWithDALLE(prompt: string) {
     try {
         const response = await aiConfig.openai.images.generate({
@@ -286,19 +303,13 @@ async function sendPostRequest(url: string, headers: any, payload: any): Promise
         if (response.status === 200) {
             return response;
         } else {
-            throw new Error(`Failed to get a successful response! Status code: ${response.status}, Response: ${response.statusText}`);
+            debugLog(`Failed to get a successful response! Status code: ${response.status}, Response: ${response.statusText}`);
+            return undefined;
         }
     } catch (error) {
-        throw new Error(`HTTP Request Failed: ${error}`);
+        debugLog(`Error sending inpaint payload: ${error}`);
+        return undefined;
     }
-}
-
-export async function inpaintImage(prompt: string): Promise<void> {
-    const payload = inpaintingPayload;
-    // @ts-ignore
-    payload["prompt"] = [prompt];
-    const response = await sendPostRequest(aiConfig.inpaintUrl, {}, payload);
-    return response.data.images[0];
 }
 
 export async function generateMusic(prompt: string) {
